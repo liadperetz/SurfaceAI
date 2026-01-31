@@ -163,23 +163,23 @@ curl -s http://localhost:11503/api/tags | jq '.models[].name'
 
 ```bash
 OLLAMA_HOST=localhost:11501 ollama pull llama3.1:8b
-OLLAMA_HOST=localhost:11502 ollama pull gemma:7b
-OLLAMA_HOST=localhost:11503 ollama pull qwen:7b
+OLLAMA_HOST=localhost:11502 ollama pull gemma3:12b
+OLLAMA_HOST=localhost:11503 ollama pull qwen3:14b
 ```
 
 ### Step 3: Run Experiments in Parallel
 
 ```bash
 # Run all 3 experiments in parallel (background processes)
-surfaceai run -d browserart -p ollama -m llama3.1:8b \
+uv run surfaceai run -d browserart -p ollama -m llama3.1:8b \
   --base-url http://localhost:11501/v1 \
   -n 100 -r 5 > logs/llama.log 2>&1 &
 
-surfaceai run -d browserart -p ollama -m gemma:7b \
+uv run surfaceai run -d browserart -p ollama -m gemma3:12b \
   --base-url http://localhost:11502/v1 \
   -n 100 -r 5 > logs/gemma.log 2>&1 &
 
-surfaceai run -d browserart -p ollama -m qwen:7b \
+uv run surfaceai run -d browserart -p ollama -m qwen3:14b \
   --base-url http://localhost:11503/v1 \
   -n 100 -r 5 > logs/qwen.log 2>&1 &
 
@@ -187,6 +187,8 @@ surfaceai run -d browserart -p ollama -m qwen:7b \
 wait
 echo "All experiments completed!"
 ```
+tmux new-session -d -s surfaceai-qwen \
+  "cd /home/liad.peretz/SurfaceAI-prod && uv run surfaceai run -d browserart -p ollama -m qwen3:14b --base-url http://localhost:11503/v1 -n 100 -r 5 > logs/qwen.log 2>&1"
 
 ### Step 4: View Results
 

@@ -1,6 +1,7 @@
 """Application settings with .env support."""
 
 from typing import Optional
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,17 +15,32 @@ class Settings(BaseSettings):
     )
 
     # Ollama
-    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_base_url: str = Field(
+        default="http://localhost:11434/v1",
+        validation_alias=AliasChoices("OLLAMA_BASE_URL", "SURFACEAI_OLLAMA_BASE_URL"),
+    )
 
     # OpenAI
-    openai_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_API_KEY", "SURFACEAI_OPENAI_API_KEY"),
+    )
 
     # Groq
-    groq_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("GROQ_API_KEY", "SURFACEAI_GROQ_API_KEY"),
+    )
 
     # DeepSeek
-    deepseek_api_key: Optional[str] = None
-    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("DEEPSEEK_API_KEY", "SURFACEAI_DEEPSEEK_API_KEY"),
+    )
+    deepseek_base_url: str = Field(
+        default="https://api.deepseek.com/v1",
+        validation_alias=AliasChoices("DEEPSEEK_BASE_URL", "SURFACEAI_DEEPSEEK_BASE_URL"),
+    )
 
     # Output
     default_out_dir: str = "runs"
