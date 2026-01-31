@@ -13,6 +13,7 @@ app = typer.Typer(
     name="surfaceai",
     help="SurfaceAI: Research framework for evaluating AI safety",
     no_args_is_help=True,
+    add_completion=False,
 )
 console = Console()
 
@@ -31,8 +32,15 @@ class Dataset(str, Enum):
 
 
 # --- Providers subcommand ---
-providers_app = typer.Typer(help="Manage LLM providers")
+providers_app = typer.Typer(help="Manage LLM providers", invoke_without_command=True)
 app.add_typer(providers_app, name="providers")
+
+
+@providers_app.callback()
+def providers_callback(ctx: typer.Context):
+    """List or manage LLM providers."""
+    if ctx.invoked_subcommand is None:
+        providers_list()
 
 
 @providers_app.command("list")
@@ -71,8 +79,15 @@ def providers_test(
 
 
 # --- Datasets subcommand ---
-datasets_app = typer.Typer(help="Manage datasets")
+datasets_app = typer.Typer(help="Manage datasets", invoke_without_command=True)
 app.add_typer(datasets_app, name="datasets")
+
+
+@datasets_app.callback()
+def datasets_callback(ctx: typer.Context):
+    """List or manage datasets."""
+    if ctx.invoked_subcommand is None:
+        datasets_list()
 
 
 @datasets_app.command("list")
