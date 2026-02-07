@@ -41,7 +41,10 @@ htmlcov/
 .ruff_cache/
 
 # Output
-runs/
+# runs/
+logs/
+
+runs/20260131_224519__llm__ollama__qwen3-14b__browserart__judge_gpt-4o-mini__seed42__75f71fd6/
 
 # OS
 .DS_Store

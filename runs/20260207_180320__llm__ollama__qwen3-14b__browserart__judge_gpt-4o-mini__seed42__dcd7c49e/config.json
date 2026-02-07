@@ -1,0 +1,13 @@
+{
+  "layer": "llm",
+  "dataset": "browserart",
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "base_url": null,
+  "judge_provider": "openai",
+  "judge_model": "gpt-4o-mini",
+  "n": 100,
+  "repeats": 5,
+  "seed": 42,
+  "run_id": "20260207_180320__llm__ollama__qwen3-14b__browserart__judge_gpt-4o-mini__seed42__dcd7c49e"
+}
