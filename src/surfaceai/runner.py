@@ -109,6 +109,7 @@ def run_experiment(
                         "category": item.get("category", ""),
                     }
                     trace_file.write(json.dumps(record) + "\n")
+                    trace_file.flush()
                     pbar.update(1)
 
     # Calculate summary

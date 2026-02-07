@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Literal, Optional
+
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from surfaceai.config.settings import get_settings
 
@@ -45,10 +49,12 @@ class LLMClient:
         base_url: Optional[str] = None,
         temperature: float = 0.0,
         max_tokens: int = 512,
+        max_retries: int = 3,
     ):
         self.provider = provider
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_retries = max_retries
 
         config = PROVIDER_DEFAULTS[provider]
         self.model = model or config["default_model"]
@@ -85,13 +91,28 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ) -> str:
         """Send chat completion request and return the response content."""
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=temperature if temperature is not None else self.temperature,
-            max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
-        )
-        return (response.choices[0].message.content or "").strip()
+        extra_kwargs = {}
+        if self.provider == "ollama":
+            extra_kwargs["extra_body"] = {"think": False}
+
+        for attempt in range(1, self.max_retries + 1):
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature if temperature is not None else self.temperature,
+                max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
+                **extra_kwargs,
+            )
+            content = (response.choices[0].message.content or "").strip()
+            if content:
+                return content
+            if attempt < self.max_retries:
+                logger.warning(
+                    "Empty response from %s (attempt %d/%d), retrying...",
+                    self.model, attempt, self.max_retries,
+                )
+        logger.warning("Empty response from %s after %d attempts", self.model, self.max_retries)
+        return ""
 
     def __repr__(self) -> str:
         return f"LLMClient(provider={self.provider!r}, model={self.model!r})"
