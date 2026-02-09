@@ -1,0 +1,141 @@
+services:
+  # OpenHands with Ollama (local LLM) - Port 3000
+  openhands-ollama:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-ollama
+    ports:
+      - "3000:3000"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_BASE_URL=http://host.docker.internal:11434/v1
+      - LLM_MODEL=openai/llama3.1:8b
+      - LLM_API_KEY=ollama
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-ollama-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - ollama
+
+  # OpenHands with OpenAI (GPT-4o) - Port 3001
+  openhands-openai:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-openai
+    ports:
+      - "3001:3000"
+    env_file:
+      - ../.env
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_MODEL=gpt-4o-mini
+      - LLM_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-openai-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - openai
+
+  # OpenHands with DeepSeek - Port 3002
+  openhands-deepseek:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-deepseek
+    ports:
+      - "3002:3000"
+    env_file:
+      - ../.env
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_MODEL=deepseek-chat
+      - LLM_BASE_URL=https://api.deepseek.com/v1
+      - LLM_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-deepseek-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - deepseek
+
+  # OpenHands with Ollama llama3.1 via HPC tunnel - Port 3003 (connects to Ollama on 11444)
+  openhands-ollama-llama3.1:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-ollama-llama3.1
+    ports:
+      - "3003:3000"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_BASE_URL=http://host.docker.internal:11444/v1
+      - LLM_MODEL=openai/llama3.1:8b
+      - LLM_API_KEY=ollama
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-ollama-llama3.1-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - ollama-llama3.1
+
+  # OpenHands with Ollama gemma via HPC tunnel - Port 3004 (connects to Ollama on 11445)
+  openhands-ollama-gemma:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-ollama-gemma
+    ports:
+      - "3004:3000"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_BASE_URL=http://host.docker.internal:11445/v1
+      - LLM_MODEL=openai/gemma:7b
+      - LLM_API_KEY=ollama
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-ollama-gemma-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - ollama-gemma
+
+  # OpenHands with Ollama qwen via HPC tunnel - Port 3005 (connects to Ollama on 11446)
+  openhands-ollama-qwen:
+    image: docker.openhands.dev/openhands/openhands:1.1
+    container_name: openhands-ollama-qwen
+    ports:
+      - "3005:3000"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.openhands.dev/openhands/runtime:1.1-nikolaik
+      - LOG_ALL_EVENTS=true
+      - LLM_BASE_URL=http://host.docker.internal:11446/v1
+      - LLM_MODEL=openai/qwen:7b
+      - LLM_API_KEY=ollama
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-ollama-qwen-data:/.openhands
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - ollama-qwen
+
+  # Website server for mock websites
+  websites:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.websites
+    container_name: surfaceai-websites
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  openhands-ollama-data:
+  openhands-openai-data:
+  openhands-deepseek-data:
+  openhands-ollama-llama3.1-data:
+  openhands-ollama-gemma-data:
+  openhands-ollama-qwen-data:

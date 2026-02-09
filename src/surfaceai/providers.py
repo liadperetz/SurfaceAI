@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal, Optional
 
+from ollama import Client as OllamaClient
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ ProviderName = Literal["ollama", "openai", "groq", "deepseek"]
 # Default configurations per provider
 PROVIDER_DEFAULTS = {
     "ollama": {
-        "base_url": "http://localhost:11434/v1",
+        "base_url": "http://localhost:11434",
         "api_key": "ollama",  # Ollama doesn't require a real key
         "default_model": "llama3.1:8b",
     },
@@ -82,7 +83,11 @@ class LLMClient:
                     f"Set {config['api_key_env']} environment variable or pass api_key parameter."
                 )
 
-        self._client = OpenAI(base_url=effective_base_url, api_key=effective_api_key)
+        # Use native Ollama client (think=False can't be passed via OpenAI SDK)
+        if provider == "ollama":
+            self._client = OllamaClient(host=effective_base_url)
+        else:
+            self._client = OpenAI(base_url=effective_base_url, api_key=effective_api_key)
 
     def chat(
         self,
@@ -91,19 +96,26 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ) -> str:
         """Send chat completion request and return the response content."""
-        extra_kwargs = {}
-        if self.provider == "ollama":
-            extra_kwargs["extra_body"] = {"think": False}
+        temp = temperature if temperature is not None else self.temperature
+        tokens = max_tokens if max_tokens is not None else self.max_tokens
 
         for attempt in range(1, self.max_retries + 1):
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature if temperature is not None else self.temperature,
-                max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
-                **extra_kwargs,
-            )
-            content = (response.choices[0].message.content or "").strip()
+            if self.provider == "ollama":
+                response = self._client.chat(
+                    model=self.model,
+                    messages=messages,
+                    think=False,
+                    options={"temperature": temp, "num_predict": tokens},
+                )
+                content = (response.message.content or "").strip()
+            else:
+                response = self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temp,
+                    max_tokens=tokens,
+                )
+                content = (response.choices[0].message.content or "").strip()
             if content:
                 return content
             if attempt < self.max_retries:

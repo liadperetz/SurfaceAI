@@ -41,7 +41,8 @@ htmlcov/
 .ruff_cache/
 
 # Output
-runs/
+# runs/
+logs/
 
 # OS
 .DS_Store

@@ -1,135 +1,214 @@
-"""Experiment runner for LLM safety evaluation."""
+"""Experiment runner for LLM and web agent safety evaluation."""
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from tqdm import tqdm
 
+from surfaceai.config.schemas import (
+    ExperimentConfig,
+    ExperimentSummary,
+    JudgeType,
+    Layer,
+    TraceRecord,
+)
 from surfaceai.datasets import load_dataset
+from surfaceai.judge import create_five_level_judge, create_judge
 from surfaceai.providers import LLMClient
-from surfaceai.judge import Judge, create_judge
 
 
-def run_experiment(
-    layer: str,
-    dataset: str,
-    provider: str,
-    model: Optional[str] = None,
-    base_url: Optional[str] = None,
-    judge_provider: str = "openai",
-    judge_model: str = "gpt-4o-mini",
-    n: int = 100,
-    repeats: int = 5,
-    seed: int = 42,
-    out_dir: str = "runs",
-) -> dict:
+# ---------------------------------------------------------------------------
+# Target / Judge factories
+# ---------------------------------------------------------------------------
+
+def _create_target(config: ExperimentConfig):
+    """Create the evaluation target (LLMClient or OpenHandsRunner)."""
+    if config.layer == Layer.openhands:
+        from surfaceai.openhands import OpenHandsRunner
+        return OpenHandsRunner(config.openhands, config.provider, config.model)
+
+    return LLMClient(
+        provider=config.provider.value,
+        model=config.model,
+        base_url=config.base_url,
+    )
+
+
+def _create_judge(config: ExperimentConfig):
+    """Create the judge based on config."""
+    judge_cfg = config.judge
+    if judge_cfg.judge_type == JudgeType.five_level:
+        return create_five_level_judge(
+            provider=judge_cfg.provider.value,
+            model=judge_cfg.model,
+        )
+    return create_judge(
+        provider=judge_cfg.provider.value,
+        model=judge_cfg.model,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-item evaluation
+# ---------------------------------------------------------------------------
+
+def _evaluate_item(
+    target,
+    item: dict,
+    layer: Layer,
+) -> tuple[str, list]:
+    """Run the target on a single item. Returns (response, steps)."""
+    if layer == Layer.openhands:
+        result = target.run(
+            prompt=item["prompt"],
+            website_url=item.get("website_url"),
+        )
+        return result["response"], result.get("steps", [])
+
+    response = target.chat([{"role": "user", "content": item["prompt"]}])
+    return response, []
+
+
+def _judge_and_record(
+    judge,
+    judge_type: JudgeType,
+    item: dict,
+    rep: int,
+    response: str,
+    steps: list,
+) -> TraceRecord:
+    """Judge a response and build a TraceRecord."""
+    if judge_type == JudgeType.five_level:
+        j = judge.judge(item["prompt"], response, steps)
+        return TraceRecord(
+            id=item["id"],
+            rep=rep,
+            prompt=item["prompt"],
+            response=response,
+            steps=steps or None,
+            harmful=j.harmful,
+            judge_reason=j.reason,
+            category=item.get("category", ""),
+            level=j.level.value,
+            level_name=j.level.name,
+            has_denial=j.has_denial,
+            has_actions=j.has_actions,
+        )
+
+    j = judge.judge(item["prompt"], response)
+    return TraceRecord(
+        id=item["id"],
+        rep=rep,
+        prompt=item["prompt"],
+        response=response,
+        steps=steps or None,
+        harmful=j.harmful,
+        judge_reason=j.reason,
+        category=item.get("category", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
     """Run a safety evaluation experiment.
 
     Args:
-        layer: Execution layer (llm, openhands, mas)
-        dataset: Dataset name (browserart, do_not_answer, jailbreakbench)
-        provider: Target LLM provider
-        model: Target model ID (uses provider default if None)
-        base_url: Custom API base URL (for Ollama on different ports)
-        judge_provider: Judge LLM provider
-        judge_model: Judge model ID
-        n: Number of samples from dataset
-        repeats: Number of times to repeat each sample
-        seed: Random seed for reproducibility
-        out_dir: Output directory
+        config: Full experiment configuration.
 
     Returns:
-        Summary dict with ASR and statistics
+        ExperimentSummary with ASR and statistics.
     """
-    # Create output directory
+    # Resolve effective model name
+    model_name = config.effective_model
+
+    # Build run directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = (model or "default").replace(":", "-").replace("/", "-")
-    judge_name = judge_model.replace(":", "-").replace("/", "-")
-    run_id = f"{timestamp}__{layer}__{provider}__{model_name}__{dataset}__judge_{judge_name}__seed{seed}__{uuid.uuid4().hex[:8]}"
-    run_dir = Path(out_dir) / run_id
+    safe_model = model_name.replace(":", "-").replace("/", "-")
+    safe_judge = config.judge.model.replace(":", "-").replace("/", "-")
+    run_id = (
+        f"{timestamp}__{config.layer.value}__{config.provider.value}__{safe_model}"
+        f"__{config.dataset}__judge_{safe_judge}__seed{config.seed}"
+        f"__{uuid.uuid4().hex[:8]}"
+    )
+    run_dir = Path(config.out_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize clients
-    target = LLMClient(provider=provider, model=model, base_url=base_url)
-    judge = create_judge(provider=judge_provider, model=judge_model)
+    # Save config.json
+    (run_dir / "config.json").write_text(
+        config.model_dump_json(indent=2, exclude={"out_dir"})
+    )
 
     # Load dataset
-    items = load_dataset(dataset, n=n, seed=seed)
+    website_base_url = (
+        config.openhands.website_base_url
+        if config.layer == Layer.openhands
+        else None
+    )
+    items = load_dataset(
+        config.dataset, n=config.n, seed=config.seed,
+        website_base_url=website_base_url,
+    )
 
-    # Save config
-    config = {
-        "layer": layer,
-        "dataset": dataset,
-        "provider": provider,
-        "model": target.model,
-        "base_url": base_url,
-        "judge_provider": judge_provider,
-        "judge_model": judge_model,
-        "n": n,
-        "repeats": repeats,
-        "seed": seed,
-        "run_id": run_id,
-    }
-    (run_dir / "config.json").write_text(json.dumps(config, indent=2))
+    # Create target and judge
+    target = _create_target(config)
+    judge = _create_judge(config)
 
-    # Run evaluations
-    trace_path = run_dir / "trace.jsonl"
-    total_evaluations = len(items) * repeats
+    # Evaluation loop
+    total = len(items) * config.repeats
     harmful_count = 0
 
-    with open(trace_path, "w") as trace_file:
-        with tqdm(total=total_evaluations, desc="Evaluating") as pbar:
+    with open(run_dir / "trace.jsonl", "w") as trace_file:
+        with tqdm(total=total, desc="Evaluating") as pbar:
             for item in items:
-                for rep in range(repeats):
-                    # Get response from target model
+                for rep in range(config.repeats):
                     try:
-                        response = target.chat([{"role": "user", "content": item["prompt"]}])
+                        response, steps = _evaluate_item(
+                            target, item, config.layer,
+                        )
                     except Exception as e:
-                        response = f"[ERROR: {e}]"
+                        response, steps = f"[ERROR: {e}]", []
 
-                    # Judge the response
-                    judgment = judge.judge(item["prompt"], response)
+                    record = _judge_and_record(
+                        judge, config.judge.judge_type,
+                        item, rep, response, steps,
+                    )
 
-                    if judgment.harmful:
+                    if record.harmful:
                         harmful_count += 1
 
-                    # Write trace record
-                    record = {
-                        "id": item["id"],
-                        "rep": rep,
-                        "prompt": item["prompt"],
-                        "response": response,
-                        "harmful": judgment.harmful,
-                        "judge_reason": judgment.reason,
-                        "category": item.get("category", ""),
-                    }
-                    trace_file.write(json.dumps(record) + "\n")
+                    trace_file.write(
+                        record.model_dump_json(exclude_none=True) + "\n"
+                    )
                     trace_file.flush()
                     pbar.update(1)
 
-    # Calculate summary
-    asr = harmful_count / total_evaluations if total_evaluations > 0 else 0
-    summary = {
-        "run_id": run_id,
-        "layer": layer,
-        "dataset": dataset,
-        "provider": provider,
-        "model": target.model,
-        "judge_provider": judge_provider,
-        "judge_model": judge_model,
-        "n": n,
-        "repeats": repeats,
-        "seed": seed,
-        "total": total_evaluations,
-        "harmful": harmful_count,
-        "asr": asr,
-    }
+    # Cleanup
+    if config.layer == Layer.openhands:
+        target.cleanup()
 
-    (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
+    # Build and save summary
+    summary = ExperimentSummary(
+        run_id=run_id,
+        layer=config.layer.value,
+        dataset=config.dataset,
+        provider=config.provider.value,
+        model=model_name,
+        judge_provider=config.judge.provider.value,
+        judge_model=config.judge.model,
+        judge_type=config.judge.judge_type.value,
+        n=config.n,
+        repeats=config.repeats,
+        seed=config.seed,
+        total=total,
+        harmful=harmful_count,
+        asr=harmful_count / total if total > 0 else 0,
+    )
+    (run_dir / "summary.json").write_text(summary.model_dump_json(indent=2))
 
     return summary
