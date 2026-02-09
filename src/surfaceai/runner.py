@@ -25,7 +25,17 @@ from surfaceai.providers import LLMClient
 # ---------------------------------------------------------------------------
 
 def _create_target(config: ExperimentConfig):
-    """Create the evaluation target (LLMClient or OpenHandsRunner)."""
+    """Create the evaluation target (LLMClient, OpenHandsRunner, or MASRunner)."""
+    if config.layer == Layer.mas:
+        from surfaceai.mas import MASRunner
+        return MASRunner(
+            experiment=config.mas.experiment,
+            provider=config.provider.value,
+            model=config.model,
+            openhands_settings=config.openhands,
+            max_steps=config.mas.max_steps,
+        )
+
     if config.layer == Layer.openhands:
         from surfaceai.openhands import OpenHandsRunner
         return OpenHandsRunner(config.openhands, config.provider, config.model)
@@ -39,6 +49,13 @@ def _create_target(config: ExperimentConfig):
 
 def _create_judge(config: ExperimentConfig):
     """Create the judge based on config."""
+    if config.layer == Layer.mas:
+        from surfaceai.mas.judge import create_mas_judge
+        return create_mas_judge(
+            provider=config.judge.provider.value,
+            model=config.judge.model,
+        )
+
     judge_cfg = config.judge
     if judge_cfg.judge_type == JudgeType.five_level:
         return create_five_level_judge(
@@ -59,17 +76,32 @@ def _evaluate_item(
     target,
     item: dict,
     layer: Layer,
-) -> tuple[str, list]:
-    """Run the target on a single item. Returns (response, steps)."""
+) -> tuple[str, list, list | None]:
+    """Run the target on a single item.
+
+    Returns (response, steps, agent_traces).
+    agent_traces is None for non-MAS layers.
+    """
+    if layer == Layer.mas:
+        result = target.run(
+            prompt=item["prompt"],
+            website_url=item.get("website_url"),
+        )
+        return (
+            result["response"],
+            result.get("steps", []),
+            result.get("agent_traces"),
+        )
+
     if layer == Layer.openhands:
         result = target.run(
             prompt=item["prompt"],
             website_url=item.get("website_url"),
         )
-        return result["response"], result.get("steps", [])
+        return result["response"], result.get("steps", []), None
 
     response = target.chat([{"role": "user", "content": item["prompt"]}])
-    return response, []
+    return response, [], None
 
 
 def _judge_and_record(
@@ -79,8 +111,43 @@ def _judge_and_record(
     rep: int,
     response: str,
     steps: list,
+    layer: Layer = Layer.llm,
+    agent_traces: list | None = None,
+    experiment: str | None = None,
 ) -> TraceRecord:
     """Judge a response and build a TraceRecord."""
+    if layer == Layer.mas:
+        from surfaceai.mas.agents.base import AgentResponse, AgentRole
+        # Reconstruct AgentResponse objects from dicts for the MAS judge
+        trace_objects = []
+        for t in (agent_traces or []):
+            trace_objects.append(AgentResponse(
+                agent_id=t.get("agent_id", ""),
+                role=AgentRole(t.get("role", "executor")),
+                content=t.get("content", ""),
+                refused=t.get("refused", False),
+                steps=t.get("steps", []),
+                metadata=t.get("metadata", {}),
+            ))
+        j = judge.judge(item["prompt"], trace_objects)
+        return TraceRecord(
+            id=item["id"],
+            rep=rep,
+            prompt=item["prompt"],
+            response=response,
+            steps=steps or None,
+            harmful=j.harmful,
+            judge_reason=j.reason,
+            category=item.get("category", ""),
+            level=j.level.value,
+            level_name=j.level.name,
+            experiment=experiment,
+            agent_traces=agent_traces,
+            execution_reach=j.execution_reach,
+            propagation_depth=j.propagation_depth,
+            compromised_agents=j.compromised_agents,
+        )
+
     if judge_type == JudgeType.five_level:
         j = judge.judge(item["prompt"], response, steps)
         return TraceRecord(
@@ -147,7 +214,7 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
     # Load dataset
     website_base_url = (
         config.openhands.website_base_url
-        if config.layer == Layer.openhands
+        if config.layer in (Layer.openhands, Layer.mas)
         else None
     )
     items = load_dataset(
@@ -162,25 +229,39 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
     # Evaluation loop
     total = len(items) * config.repeats
     harmful_count = 0
+    er_values: list[int] = []
+    pd_values: list[float] = []
+
+    experiment_name = (
+        config.mas.experiment.value if config.layer == Layer.mas else None
+    )
 
     with open(run_dir / "trace.jsonl", "w") as trace_file:
         with tqdm(total=total, desc="Evaluating") as pbar:
             for item in items:
                 for rep in range(config.repeats):
                     try:
-                        response, steps = _evaluate_item(
+                        response, steps, agent_traces = _evaluate_item(
                             target, item, config.layer,
                         )
                     except Exception as e:
-                        response, steps = f"[ERROR: {e}]", []
+                        response, steps, agent_traces = f"[ERROR: {e}]", [], None
 
                     record = _judge_and_record(
                         judge, config.judge.judge_type,
                         item, rep, response, steps,
+                        layer=config.layer,
+                        agent_traces=agent_traces,
+                        experiment=experiment_name,
                     )
 
                     if record.harmful:
                         harmful_count += 1
+
+                    if record.execution_reach is not None:
+                        er_values.append(record.execution_reach)
+                    if record.propagation_depth is not None:
+                        pd_values.append(record.propagation_depth)
 
                     trace_file.write(
                         record.model_dump_json(exclude_none=True) + "\n"
@@ -189,7 +270,7 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
                     pbar.update(1)
 
     # Cleanup
-    if config.layer == Layer.openhands:
+    if config.layer in (Layer.openhands, Layer.mas):
         target.cleanup()
 
     # Build and save summary
@@ -208,6 +289,13 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
         total=total,
         harmful=harmful_count,
         asr=harmful_count / total if total > 0 else 0,
+        experiment=experiment_name,
+        mean_execution_reach=(
+            sum(er_values) / len(er_values) if er_values else None
+        ),
+        mean_propagation_depth=(
+            sum(pd_values) / len(pd_values) if pd_values else None
+        ),
     )
     (run_dir / "summary.json").write_text(summary.model_dump_json(indent=2))
 

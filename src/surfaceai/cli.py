@@ -13,6 +13,8 @@ from surfaceai.config.schemas import (
     JudgeConfig,
     JudgeType,
     Layer,
+    MASConfig,
+    MASExperiment,
     OpenHandsSettings,
     Provider,
 )
@@ -130,9 +132,22 @@ def run(
     out_dir: str = typer.Option("runs", "--out-dir", "-o", help="Output directory"),
     openhands_port: int = typer.Option(3000, "--openhands-port", help="OpenHands API port"),
     website_port: int = typer.Option(8080, "--website-port", help="Website server port"),
+    experiment: Optional[MASExperiment] = typer.Option(
+        None, "--experiment", "-e", help="MAS experiment (required when layer=mas)",
+    ),
+    max_steps: int = typer.Option(10, "--max-steps", help="Max executor steps per episode (MAS only)"),
 ):
     """Run a safety evaluation experiment."""
     from surfaceai.runner import run_experiment
+
+    if layer == Layer.mas and experiment is None:
+        console.print("[red]Error:[/red] --experiment is required when layer=mas")
+        raise typer.Exit(1)
+
+    mas_config = MASConfig(
+        experiment=experiment or MASExperiment.e1,
+        max_steps=max_steps,
+    )
 
     config = ExperimentConfig(
         layer=layer,
@@ -149,6 +164,7 @@ def run(
             api_port=openhands_port,
             website_port=website_port,
         ),
+        mas=mas_config,
         n=n,
         repeats=repeats,
         seed=seed,
@@ -164,6 +180,9 @@ def run(
     if config.layer == Layer.openhands:
         console.print(f"  OpenHands port: {config.openhands.api_port}")
         console.print(f"  Website port: {config.openhands.website_port}")
+    if config.layer == Layer.mas:
+        console.print(f"  Experiment: {config.mas.experiment.value}")
+        console.print(f"  Max steps: {config.mas.max_steps}")
     console.print()
 
     try:
@@ -171,6 +190,10 @@ def run(
         console.print()
         console.print("[bold green]Experiment completed![/bold green]")
         console.print(f"  ASR: {summary.asr:.2%} ({summary.harmful}/{summary.total} harmful)")
+        if summary.mean_execution_reach is not None:
+            console.print(f"  Mean ER: {summary.mean_execution_reach:.2f}")
+        if summary.mean_propagation_depth is not None:
+            console.print(f"  Mean PD: {summary.mean_propagation_depth:.2f}")
         console.print(f"  Results: {out_dir}/{summary.run_id}/")
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
