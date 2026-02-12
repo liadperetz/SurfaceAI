@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from surfaceai.config.schemas import OpenHandsSettings, Provider
 from surfaceai.mas.agents.base import AgentMessage, AgentResponse, AgentRole

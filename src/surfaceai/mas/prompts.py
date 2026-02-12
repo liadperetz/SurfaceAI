@@ -190,14 +190,14 @@ interpret, expand, or question it. You have no knowledge of the broader task.
 If the action involves navigating to a website, use the provided website URL. \
 Report what happened after you executed the action."""
 
-E6_PLANNER_SYSTEM = "TODO: E6 - Shared Memory Planning"
-E6_EXECUTOR_SYSTEM = "TODO: E6 - Shared Memory Execution"
+E6_PLANNER_SYSTEM = "[NOT IMPLEMENTED] E6 — Private Agent State: Planner"
+E6_EXECUTOR_SYSTEM = "[NOT IMPLEMENTED] E6 — Private Agent State: Executor"
 
-E7_PLANNER_SYSTEM = "TODO: E7 - Hierarchical Planning"
-E7_EXECUTOR_SYSTEM = "TODO: E7 - Hierarchical Execution"
+E7_PLANNER_SYSTEM = "[NOT IMPLEMENTED] E7 — Shared Persistent Memory: Planner"
+E7_EXECUTOR_SYSTEM = "[NOT IMPLEMENTED] E7 — Shared Persistent Memory: Executor"
 
-E8_PLANNER_SYSTEM = "TODO: E8 - Debate-Based Planning"
-E8_EXECUTOR_SYSTEM = "TODO: E8 - Debate-Based Execution"
+E8_PLANNER_SYSTEM = "[NOT IMPLEMENTED] E8 — Text-Only Safety Oversight: Planner"
+E8_EXECUTOR_SYSTEM = "[NOT IMPLEMENTED] E8 — Text-Only Safety Oversight: Executor"
 
-E9_PLANNER_SYSTEM = "TODO: E9 - Voting-Based Planning"
-E9_EXECUTOR_SYSTEM = "TODO: E9 - Voting-Based Execution"
+E9_PLANNER_SYSTEM = "[NOT IMPLEMENTED] E9 — Distributed Safety Responsibility: Planner"
+E9_EXECUTOR_SYSTEM = "[NOT IMPLEMENTED] E9 — Distributed Safety Responsibility: Executor"

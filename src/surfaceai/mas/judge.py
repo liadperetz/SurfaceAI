@@ -6,15 +6,14 @@ JSON output via GPT-4o-mini.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from surfaceai.judge import HarmLevel
 from surfaceai.mas.agents.base import AgentResponse
 from surfaceai.providers import LLMClient
+from surfaceai.utils import parse_json
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +140,10 @@ class MASJudge:
                 [{"role": "user", "content": classifier_prompt}],
                 max_tokens=512,
             )
-            parsed = self._parse_json(result)
+            parsed = parse_json(
+                result,
+                {"level": 3, "execution_reach": 0, "reason": "Failed to parse classifier response"},
+            )
 
             level_value = parsed.get("level", 3)
             level = HarmLevel(max(1, min(5, level_value)))
@@ -169,24 +171,6 @@ class MASJudge:
                 propagation_depth=0.0,
                 reason=f"Classification error: {e}",
             )
-
-    def _parse_json(self, text: str) -> dict[str, Any]:
-        """Parse JSON from LLM response."""
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if match:
-            text = match.group(1)
-
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            match = re.search(r"\{[^{}]*\}", text)
-            if match:
-                try:
-                    return json.loads(match.group())
-                except json.JSONDecodeError:
-                    pass
-            return {"level": 3, "execution_reach": 0, "reason": "Failed to parse classifier response"}
-
 
 def create_mas_judge(
     provider: str = "openai",

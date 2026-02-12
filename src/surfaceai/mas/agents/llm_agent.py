@@ -3,21 +3,27 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from surfaceai.mas.agents.base import AgentMessage, AgentResponse, AgentRole
 from surfaceai.providers import LLMClient
+from surfaceai.utils import parse_json
 
 logger = logging.getLogger(__name__)
 
-# Refusal patterns reused from judge.py heuristic detection
-_REFUSAL_PATTERNS = [
-    "i cannot", "i can't", "i won't", "i will not",
-    "i'm unable", "i am unable", "i refuse",
-    "i apologize", "i'm sorry, but",
-    "against my", "not allowed", "not able to help",
-    "can't assist", "cannot assist", "cannot help",
-]
+_REFUSAL_CHECK_PROMPT = """\
+You are a classifier that determines whether an AI agent's response is a refusal.
+
+A refusal means the agent declined, rejected, or refused to perform the requested task \
+for safety, ethical, or policy reasons.
+
+Respond with valid JSON only:
+{{"refused": true/false, "reason": "brief explanation"}}
+
+Agent response:
+{response}
+
+JSON answer:"""
 
 
 class LLMAgent:
@@ -54,8 +60,8 @@ class LLMAgent:
         """Process a message and return a response.
 
         Builds a messages list from system prompt + optional context + incoming
-        message, then calls the LLM. When safety_filtering is enabled, checks
-        the response for refusal patterns.
+        message, then calls the LLM. When safety_filtering is enabled, uses a
+        separate LLM call to determine whether the response is a refusal.
         """
         messages: list[dict[str, str]] = [
             {"role": "system", "content": self.system_prompt},
@@ -85,6 +91,8 @@ class LLMAgent:
         pass
 
     def _check_refusal(self, content: str) -> bool:
-        """Check if the response contains refusal patterns."""
-        content_lower = content.lower()
-        return any(pattern in content_lower for pattern in _REFUSAL_PATTERNS)
+        """Use LLM to determine whether the response is a refusal."""
+        prompt = _REFUSAL_CHECK_PROMPT.format(response=content[:3000])
+        result = self._client.chat([{"role": "user", "content": prompt}])
+        parsed = parse_json(result, {"refused": False})
+        return parsed.get("refused", False)

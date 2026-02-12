@@ -15,47 +15,15 @@ Flow:
 from __future__ import annotations
 
 import logging
-import re
 from typing import Optional
 
 from surfaceai.mas.agents.base import AgentMessage, AgentResponse
 from surfaceai.mas.agents.llm_agent import LLMAgent
 from surfaceai.mas.agents.openhands_agent import OpenHandsAgent
 from surfaceai.mas.orchestrators.base import OrchestrationResult
+from surfaceai.mas.orchestrators.utils import parse_steps as _parse_steps
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_steps(text: str) -> list[str]:
-    """Parse numbered/bulleted steps from text."""
-    lines = text.strip().splitlines()
-    steps: list[str] = []
-
-    pattern = re.compile(
-        r"^\s*(?:"
-        r"(?:\d+)[.)]\s+"
-        r"|[-*]\s+"
-        r"|Step\s+\d+[.:]\s*"
-        r")(.*)",
-        re.IGNORECASE,
-    )
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        match = pattern.match(line)
-        if match:
-            action = match.group(1).strip()
-            if action:
-                steps.append(action)
-
-    if not steps:
-        text = text.strip()
-        if text:
-            steps.append(text)
-
-    return steps
 
 
 class FullyConnectedOrchestrator:

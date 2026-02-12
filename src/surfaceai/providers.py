@@ -8,9 +8,9 @@ from typing import Literal, Optional
 from ollama import Client as OllamaClient
 from openai import OpenAI
 
-logger = logging.getLogger(__name__)
-
 from surfaceai.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 ProviderName = Literal["ollama", "openai", "groq", "deepseek"]
 

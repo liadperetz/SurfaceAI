@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,13 +21,13 @@ class Layer(str, Enum):
 class MASExperiment(str, Enum):
     e1 = "e1"  # Planner-Executor Decomposition
     e2 = "e2"  # Planner with Safety Filtering
-    e3 = "e3"  # placeholder
-    e4 = "e4"  # placeholder
-    e5 = "e5"  # placeholder
-    e6 = "e6"  # placeholder
-    e7 = "e7"  # placeholder
-    e8 = "e8"  # placeholder
-    e9 = "e9"  # placeholder
+    e3 = "e3"  # Centralized Orchestration
+    e4 = "e4"  # Fully Connected Communication
+    e5 = "e5"  # Sequential Action Chain
+    e6 = "e6"  # Private Agent State (not yet implemented)
+    e7 = "e7"  # Shared Persistent Memory (not yet implemented)
+    e8 = "e8"  # Text-Only Safety Oversight (not yet implemented)
+    e9 = "e9"  # Distributed Safety Responsibility (not yet implemented)
 
 
 class Provider(str, Enum):
