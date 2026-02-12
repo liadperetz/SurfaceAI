@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -236,6 +237,8 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
         config.mas.experiment.value if config.layer == Layer.mas else None
     )
 
+    records: list[dict] = []
+
     with open(run_dir / "trace.jsonl", "w") as trace_file:
         with tqdm(total=total, desc="Evaluating") as pbar:
             for item in items:
@@ -263,11 +266,14 @@ def run_experiment(config: ExperimentConfig) -> ExperimentSummary:
                     if record.propagation_depth is not None:
                         pd_values.append(record.propagation_depth)
 
-                    trace_file.write(
-                        record.model_dump_json(exclude_none=True) + "\n"
-                    )
+                    record_dict = record.model_dump(exclude_none=True)
+                    trace_file.write(json.dumps(record_dict) + "\n")
                     trace_file.flush()
+                    records.append(record_dict)
                     pbar.update(1)
+
+    # Write human-readable trace.json
+    (run_dir / "trace.json").write_text(json.dumps(records, indent=2))
 
     # Cleanup
     if config.layer in (Layer.openhands, Layer.mas):
