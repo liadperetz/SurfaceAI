@@ -67,6 +67,7 @@ class OpenHandsSettings(BaseModel):
     poll_interval: float = 2.0
     auto_start_container: bool = True
     auto_stop_container: bool = False
+    skip_docker: bool = False
 
     @property
     def api_base_url(self) -> str:

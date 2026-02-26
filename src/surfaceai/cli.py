@@ -132,6 +132,8 @@ def run(
     out_dir: str = typer.Option("runs", "--out-dir", "-o", help="Output directory"),
     openhands_port: int = typer.Option(3000, "--openhands-port", help="OpenHands API port"),
     website_port: int = typer.Option(8080, "--website-port", help="Website server port"),
+    skip_docker: bool = typer.Option(False, "--skip-docker", help="Skip Docker, assume OpenHands server is running externally"),
+    website_host: str = typer.Option("host.docker.internal", "--website-host", help="Hostname for website server (use 'localhost' for local mode)"),
     experiment: Optional[MASExperiment] = typer.Option(
         None, "--experiment", "-e", help="MAS experiment (required when layer=mas)",
     ),
@@ -163,6 +165,10 @@ def run(
         openhands=OpenHandsSettings(
             api_port=openhands_port,
             website_port=website_port,
+            website_host=website_host,
+            skip_docker=skip_docker,
+            auto_start_container=not skip_docker,
+            **({"ollama_base_url": "http://localhost:11434/v1"} if skip_docker else {}),
         ),
         mas=mas_config,
         n=n,

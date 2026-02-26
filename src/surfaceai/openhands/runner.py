@@ -90,6 +90,8 @@ class OpenHandsRunner:
 
     def cleanup(self) -> None:
         """Stop container if we started it."""
+        if self.settings.skip_docker:
+            return
         if self.settings.auto_stop_container and self._container_started_by_us:
             self._stop_container()
 
@@ -183,6 +185,14 @@ class OpenHandsRunner:
         return False
 
     def _ensure_container_running(self) -> None:
+        if self.settings.skip_docker:
+            if self._wait_for_api(timeout=10):
+                return
+            raise RuntimeError(
+                f"OpenHands API not reachable at {self.settings.api_base_url}. "
+                "Start it manually first."
+            )
+
         if self._is_container_running():
             if self._wait_for_api(timeout=10):
                 return

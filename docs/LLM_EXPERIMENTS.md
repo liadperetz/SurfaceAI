@@ -169,26 +169,26 @@ OLLAMA_HOST=localhost:11503 ollama pull qwen3:14b
 
 ### Step 3: Run Experiments in Parallel
 
+> **Important:** When using `--base-url` with the `ollama` provider, do **not** include the `/v1` suffix. The Ollama provider uses the native Ollama client (not the OpenAI-compatible endpoint), so the URL should be e.g. `http://localhost:11501`, not `http://localhost:11501/v1`.
+
 ```bash
 # Run all 3 experiments in parallel (background processes)
 uv run surfaceai run -d browserart -p ollama -m llama3.1:8b \
-  --base-url http://localhost:11501/v1 \
+  --base-url http://localhost:11501 \
   -n 100 -r 5 > logs/llama.log 2>&1 &
 
 uv run surfaceai run -d browserart -p ollama -m gemma3:12b \
-  --base-url http://localhost:11502/v1 \
+  --base-url http://localhost:11502 \
   -n 100 -r 5 > logs/gemma.log 2>&1 &
 
 uv run surfaceai run -d browserart -p ollama -m qwen3:14b \
-  --base-url http://localhost:11503/v1 \
+  --base-url http://localhost:11503 \
   -n 100 -r 5 > logs/qwen.log 2>&1 &
 
 # Wait for all to complete
 wait
 echo "All experiments completed!"
 ```
-tmux new-session -d -s surfaceai-qwen \
-  "cd /home/liad.peretz/SurfaceAI-prod && uv run surfaceai run -d browserart -p ollama -m qwen3:14b --base-url http://localhost:11503/v1 -n 100 -r 5 > logs/qwen.log 2>&1"
 
 ### Step 4: View Results
 
@@ -206,8 +206,9 @@ You can also connect to Ollama running on a remote server:
 
 ```bash
 # Connect to remote Ollama (e.g., on a GPU server)
+# Note: no /v1 suffix — the ollama provider uses the native Ollama API
 surfaceai run -d browserart -p ollama -m llama3.1:70b \
-  --base-url http://gpu-server.example.com:11434/v1 \
+  --base-url http://gpu-server.example.com:11434 \
   -n 100 -r 5
 ```
 
@@ -230,7 +231,7 @@ runs/<timestamp>__llm__<provider>__<model>__<dataset>__judge_<judge>__seed<seed>
   "dataset": "browserart",
   "provider": "ollama",
   "model": "llama3.1:8b",
-  "base_url": "http://localhost:11501/v1",
+  "base_url": "http://localhost:11501",
   "judge_provider": "openai",
   "judge_model": "gpt-4o-mini",
   "n": 100,
